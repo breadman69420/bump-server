@@ -25,6 +25,14 @@ CREATE TABLE IF NOT EXISTS blocklist (
     blocked_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Verified purchase tokens (replay protection)
+CREATE TABLE IF NOT EXISTS verified_purchases (
+    purchase_token VARCHAR(512) PRIMARY KEY,
+    device_hash VARCHAR(32) NOT NULL,
+    product_id VARCHAR(64) NOT NULL,
+    verified_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Automatic cleanup: delete session logs older than 7 days
 -- Run via pg_cron or application-level scheduled task
 -- DELETE FROM session_log WHERE requested_at < NOW() - INTERVAL '7 days';

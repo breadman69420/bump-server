@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/androidpublisher/v3"
 	"google.golang.org/api/option"
 
+	"github.com/ttalvac/bump-server/cache"
+	"github.com/ttalvac/bump-server/db"
 	"github.com/ttalvac/bump-server/middleware"
 )
 
@@ -19,10 +22,12 @@ const packageName = "me.getbump.app"
 // using the Google Play Developer API.
 type VerifyHandler struct {
 	service *androidpublisher.Service
+	queries *db.Queries
+	limiter *cache.RateLimiter
 }
 
-func NewVerifyHandler(serviceAccountJSON string) *VerifyHandler {
-	h := &VerifyHandler{}
+func NewVerifyHandler(serviceAccountJSON string, queries *db.Queries, limiter *cache.RateLimiter) *VerifyHandler {
+	h := &VerifyHandler{queries: queries, limiter: limiter}
 
 	if serviceAccountJSON != "" {
 		conf, err := google.JWTConfigFromJSON(
@@ -83,8 +88,35 @@ func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context()
+
+	// Rate limit: 5 base × 2 (hard block multiplier in CheckRateLimit) = hard block at 10/hour
+	allowed, _, delay := h.limiter.CheckRateLimit(ctx, "verify:"+req.DeviceHash, 5)
+	if !allowed {
+		writeJSON(w, http.StatusTooManyRequests, errorResponse{Error: "too many requests"})
+		return
+	}
+	if delay > 0 {
+		time.Sleep(delay)
+	}
+
+	// Replay protection: reject already-verified purchase tokens
+	alreadyVerified, err := h.queries.IsPurchaseVerified(ctx, req.PurchaseToken)
+	if err != nil {
+		log.Printf("Database error checking purchase replay for %s: %v", req.DeviceHash, err)
+		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "service temporarily unavailable"})
+		return
+	}
+	if alreadyVerified {
+		writeJSON(w, http.StatusOK, verifyResponse{Valid: false, BumpsGranted: 0})
+		return
+	}
+
 	// If no service account configured, accept for development/testing
 	if h.service == nil {
+		if err := h.queries.RecordVerifiedPurchase(ctx, req.PurchaseToken, req.DeviceHash, req.ProductID); err != nil {
+		log.Printf("Failed to record verified purchase for %s: %v", req.DeviceHash, err)
+	}
 		writeJSON(w, http.StatusOK, verifyResponse{
 			Valid:        true,
 			BumpsGranted: 1,
@@ -95,9 +127,9 @@ func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Verify with Google Play Developer API
 	purchase, err := h.service.Purchases.Products.Get(
 		packageName, req.ProductID, req.PurchaseToken,
-	).Context(r.Context()).Do()
+	).Context(ctx).Do()
 	if err != nil {
-		log.Printf("Google Play verification failed: %v", err)
+		log.Printf("Google Play verification error for device %s: %v", req.DeviceHash, err)
 		writeJSON(w, http.StatusOK, verifyResponse{Valid: false, BumpsGranted: 0})
 		return
 	}
@@ -106,6 +138,11 @@ func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if purchase.PurchaseState != 0 {
 		writeJSON(w, http.StatusOK, verifyResponse{Valid: false, BumpsGranted: 0})
 		return
+	}
+
+	// Record verified token to prevent replay
+	if err := h.queries.RecordVerifiedPurchase(ctx, req.PurchaseToken, req.DeviceHash, req.ProductID); err != nil {
+		log.Printf("Failed to record verified purchase for %s: %v", req.DeviceHash, err)
 	}
 
 	writeJSON(w, http.StatusOK, verifyResponse{

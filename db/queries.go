@@ -97,6 +97,26 @@ func (q *Queries) GetBlocklist(ctx context.Context) ([]string, error) {
 	return hashes, rows.Err()
 }
 
+// IsPurchaseVerified checks if a purchase token has already been granted.
+func (q *Queries) IsPurchaseVerified(ctx context.Context, purchaseToken string) (bool, error) {
+	var exists bool
+	err := q.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM verified_purchases WHERE purchase_token = $1)`,
+		purchaseToken,
+	).Scan(&exists)
+	return exists, err
+}
+
+// RecordVerifiedPurchase stores a verified purchase token to prevent replay.
+func (q *Queries) RecordVerifiedPurchase(ctx context.Context, purchaseToken, deviceHash, productID string) error {
+	_, err := q.db.ExecContext(ctx,
+		`INSERT INTO verified_purchases (purchase_token, device_hash, product_id) VALUES ($1, $2, $3)
+		 ON CONFLICT (purchase_token) DO NOTHING`,
+		purchaseToken, deviceHash, productID,
+	)
+	return err
+}
+
 // CleanupOldSessions deletes session logs older than 7 days.
 func (q *Queries) CleanupOldSessions(ctx context.Context) (int64, error) {
 	cutoff := time.Now().Add(-7 * 24 * time.Hour)
