@@ -11,6 +11,7 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /app
 COPY --from=builder /app/bump-server .
 COPY --from=builder /app/db/schema.sql ./db/schema.sql
+COPY --from=builder /app/static ./static
 
 EXPOSE 8080
 CMD ["./bump-server"]

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>bump — privacy policy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+            background: #000;
+            color: #ccc;
+            min-height: 100vh;
+            padding: 3rem 1.5rem;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        a.back {
+            color: #555;
+            text-decoration: none;
+            font-size: 0.85rem;
+            display: inline-block;
+            margin-bottom: 2rem;
+        }
+        a.back:hover { color: #fff; }
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.5rem;
+        }
+        .updated {
+            font-size: 0.8rem;
+            color: #555;
+            margin-bottom: 2.5rem;
+        }
+        h2 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #fff;
+            margin-top: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        p {
+            font-size: 0.9rem;
+            line-height: 1.7;
+            margin-bottom: 1rem;
+            color: #999;
+        }
+        ul {
+            margin: 0.5rem 0 1rem 1.2rem;
+            font-size: 0.9rem;
+            color: #999;
+            line-height: 1.7;
+        }
+        strong { color: #ccc; }
+        a { color: #fff; }
+        footer {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid #111;
+            text-align: center;
+        }
+        footer p {
+            font-size: 0.8rem;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back">&larr; back to bump</a>
+
+        <h1>privacy policy</h1>
+        <p class="updated">last updated: april 2, 2026</p>
+
+        <p>
+            bump is designed to share as little data as possible. we built it this way on purpose.
+            here's exactly what happens with your information.
+        </p>
+
+        <h2>what we don't collect</h2>
+        <p>we do not collect, store, or have access to:</p>
+        <ul>
+            <li>your name, email, or any account information (there are no accounts)</li>
+            <li>phone numbers or social media handles exchanged between users</li>
+            <li>your location (gps, ip-based, or otherwise)</li>
+            <li>your contacts, photos, or any other personal data on your device</li>
+            <li>the content of any interaction between users</li>
+        </ul>
+
+        <h2>what we do process</h2>
+        <p>to make bump work and prevent abuse, our server processes:</p>
+        <ul>
+            <li><strong>a one-way device hash</strong> — derived from your android id with an app-specific salt. we cannot reverse this to identify you or your device.</li>
+            <li><strong>timestamps</strong> — when you request a session token. used for rate limiting (max 10 per hour) and abuse detection.</li>
+            <li><strong>abuse reports</strong> — if someone reports a user, we store the reporter's device hash, the reported device hash, and a reason category. no personal information is included.</li>
+        </ul>
+
+        <h2>how bluetooth works in bump</h2>
+        <p>
+            all data exchange happens directly between two phones over bluetooth low energy (BLE).
+            your information never passes through our servers. the data is encrypted end-to-end
+            using AES-256-GCM with keys derived via HKDF from one-time session tokens.
+        </p>
+        <p>
+            received information is displayed for 15 seconds, then permanently erased from memory.
+            screenshots and screen recording are blocked during this window.
+        </p>
+
+        <h2>data retention</h2>
+        <ul>
+            <li>session logs (device hash + timestamp only) are automatically deleted after 7 days</li>
+            <li>abuse reports are retained until resolved</li>
+            <li>no personal data is ever written to our database because we don't have any</li>
+        </ul>
+
+        <h2>third-party services</h2>
+        <ul>
+            <li><strong>google play billing</strong> — if you purchase additional bumps, the transaction is handled entirely by google. we receive a purchase token to verify validity but no payment details.</li>
+            <li><strong>google play integrity</strong> — used to verify your device hasn't been tampered with. the attestation result is not stored.</li>
+            <li><strong>google phone number hint api</strong> — when you choose to share your phone number, it's read from your sim card via google's api. the number is sent directly to the other person over bluetooth. it never reaches our servers.</li>
+        </ul>
+
+        <h2>children's privacy</h2>
+        <p>
+            bump is intended for users 18 years of age and older. we do not knowingly
+            collect any information from minors.
+        </p>
+
+        <h2>your rights</h2>
+        <p>
+            since we don't collect personal data, there's nothing to request, correct, or delete.
+            if you believe we have information about you in error, contact us and we'll investigate.
+        </p>
+
+        <h2>law enforcement</h2>
+        <p>
+            if we receive a lawful request for data, we can only provide what we have: anonymous
+            device hashes and timestamps. we have no way to identify individual users, and we
+            have no access to any content exchanged between users.
+        </p>
+
+        <h2>changes to this policy</h2>
+        <p>
+            if we change this policy, we'll update the date at the top. for significant changes,
+            we'll notify users through the app.
+        </p>
+
+        <h2>contact</h2>
+        <p>
+            questions about this policy? reach us at
+            <a href="mailto:privacy@bumpnow.app">privacy@bumpnow.app</a>
+        </p>
+
+        <footer>
+            <p>bump &copy; 2026</p>
+        </footer>
+    </div>
+</body>
+</html>

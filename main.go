@@ -76,6 +76,21 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
+	// Static site (landing page + privacy policy)
+	mux.HandleFunc("/privacy", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/privacy/index.html")
+	})
+	mux.HandleFunc("/privacy/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/privacy/index.html")
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, "static/index.html")
+	})
+
 	// Apply middleware
 	handler := middleware.Recovery(middleware.Logger(mux))
 

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>bump — don't just stand there</title>
+    <meta name="description" content="Connect with someone nearby over Bluetooth. No profiles, no swiping. Just a moment.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+            background: #000;
+            color: #fff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .hero {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .bump-circle {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 3rem;
+            transition: transform 0.2s ease;
+        }
+
+        .bump-circle:hover {
+            transform: scale(0.95);
+        }
+
+        .bump-circle span {
+            color: #000;
+            font-size: 1.4rem;
+            font-weight: 500;
+            letter-spacing: -0.02em;
+        }
+
+        h1 {
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            font-weight: 600;
+            letter-spacing: -0.03em;
+            margin-bottom: 1rem;
+        }
+
+        .tagline {
+            font-size: clamp(0.9rem, 2vw, 1.1rem);
+            color: #555;
+            max-width: 320px;
+            line-height: 1.6;
+            margin-bottom: 3rem;
+        }
+
+        .cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.9rem 2rem;
+            background: #fff;
+            color: #000;
+            text-decoration: none;
+            border-radius: 100px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+
+        .cta:hover {
+            transform: scale(0.97);
+            opacity: 0.9;
+        }
+
+        .cta svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .how-it-works {
+            padding: 6rem 2rem;
+            text-align: center;
+            background: #0a0a0a;
+        }
+
+        .how-it-works h2 {
+            font-size: 1.1rem;
+            font-weight: 400;
+            color: #555;
+            text-transform: lowercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 3rem;
+        }
+
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 2.5rem;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            gap: 1.2rem;
+            text-align: left;
+        }
+
+        .step-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #fff;
+            flex-shrink: 0;
+            margin-top: 0.4rem;
+        }
+
+        .step-text h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+        }
+
+        .step-text p {
+            font-size: 0.85rem;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .features {
+            padding: 5rem 2rem;
+            text-align: center;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .feature {
+            padding: 1.5rem;
+            border-radius: 16px;
+            background: #111;
+            text-align: left;
+        }
+
+        .feature h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.4rem;
+        }
+
+        .feature p {
+            font-size: 0.8rem;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        footer {
+            padding: 3rem 2rem;
+            text-align: center;
+            border-top: 1px solid #111;
+        }
+
+        footer a {
+            color: #555;
+            text-decoration: none;
+            font-size: 0.8rem;
+            margin: 0 1rem;
+        }
+
+        footer a:hover {
+            color: #fff;
+        }
+
+        .footer-brand {
+            font-size: 0.85rem;
+            color: #333;
+            margin-top: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+
+    <section class="hero">
+        <div class="bump-circle">
+            <span>bump</span>
+        </div>
+        <h1>don't just stand there</h1>
+        <p class="tagline">
+            two people. one moment. no profiles, no swiping.
+            just open the app and connect with someone nearby.
+        </p>
+        <a href="https://play.google.com/store/apps/details?id=me.getbump.app" class="cta">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.61 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.5,12.92 20.16,13.19L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"/></svg>
+            get it on google play
+        </a>
+    </section>
+
+    <section class="how-it-works">
+        <h2>how it works</h2>
+        <div class="steps">
+            <div class="step">
+                <div class="step-dot"></div>
+                <div class="step-text">
+                    <h3>notice someone</h3>
+                    <p>at a coffee shop, a bar, a park. you catch their eye.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-dot"></div>
+                <div class="step-text">
+                    <h3>both tap bump</h3>
+                    <p>within 15 seconds of each other. bluetooth finds the match.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-dot"></div>
+                <div class="step-text">
+                    <h3>choose your moment</h3>
+                    <p>swap numbers, play a quick game, or answer rapid-fire questions together.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-dot"></div>
+                <div class="step-text">
+                    <h3>the rest is real life</h3>
+                    <p>info disappears in 15 seconds. no history. no trace. just a connection.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="features">
+        <div class="feature-grid">
+            <div class="feature">
+                <h3>no accounts</h3>
+                <p>no sign-up, no profile, no photos. just open and go.</p>
+            </div>
+            <div class="feature">
+                <h3>peer-to-peer</h3>
+                <p>data goes directly between phones over bluetooth. nothing stored on a server.</p>
+            </div>
+            <div class="feature">
+                <h3>encrypted</h3>
+                <p>every exchange is end-to-end encrypted. we can't see it even if we wanted to.</p>
+            </div>
+            <div class="feature">
+                <h3>self-destructing</h3>
+                <p>received info disappears in 15 seconds. screenshot-proof.</p>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div>
+            <a href="/privacy">privacy</a>
+            <a href="mailto:hello@bumpnow.app">contact</a>
+        </div>
+        <p class="footer-brand">bump &copy; 2026</p>
+    </footer>
+
+</body>
+</html>
