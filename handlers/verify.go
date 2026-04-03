@@ -1,20 +1,49 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
+
+	"golang.org/x/oauth2/google"
+	"google.golang.org/api/androidpublisher/v3"
+	"google.golang.org/api/option"
 
 	"github.com/ttalvac/bump-server/middleware"
 )
 
-// VerifyHandler handles Google Play purchase verification.
-// In production, this calls the Google Play Developer API.
-// For now, it accepts and validates the request structure,
-// returning a success response for testing.
-type VerifyHandler struct{}
+const packageName = "me.getbump.app"
 
-func NewVerifyHandler() *VerifyHandler {
-	return &VerifyHandler{}
+// VerifyHandler handles Google Play purchase verification
+// using the Google Play Developer API.
+type VerifyHandler struct {
+	service *androidpublisher.Service
+}
+
+func NewVerifyHandler(serviceAccountJSON string) *VerifyHandler {
+	h := &VerifyHandler{}
+
+	if serviceAccountJSON != "" {
+		conf, err := google.JWTConfigFromJSON(
+			[]byte(serviceAccountJSON),
+			androidpublisher.AndroidpublisherScope,
+		)
+		if err != nil {
+			log.Printf("WARN: Failed to parse service account JSON: %v", err)
+			return h
+		}
+
+		client := conf.Client(context.Background())
+		svc, err := androidpublisher.NewService(context.Background(), option.WithHTTPClient(client))
+		if err != nil {
+			log.Printf("WARN: Failed to create Android Publisher service: %v", err)
+			return h
+		}
+		h.service = svc
+	}
+
+	return h
 }
 
 type verifyRequest struct {
@@ -54,9 +83,30 @@ func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Phase 5 - Call Google Play Developer API to verify purchase:
-	// POST https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{packageName}/purchases/products/{productId}/tokens/{token}
-	// For now, assume valid for development/testing.
+	// If no service account configured, accept for development/testing
+	if h.service == nil {
+		writeJSON(w, http.StatusOK, verifyResponse{
+			Valid:        true,
+			BumpsGranted: 1,
+		})
+		return
+	}
+
+	// Verify with Google Play Developer API
+	purchase, err := h.service.Purchases.Products.Get(
+		packageName, req.ProductID, req.PurchaseToken,
+	).Context(r.Context()).Do()
+	if err != nil {
+		log.Printf("Google Play verification failed: %v", err)
+		writeJSON(w, http.StatusOK, verifyResponse{Valid: false, BumpsGranted: 0})
+		return
+	}
+
+	// PurchaseState: 0 = Purchased, 1 = Canceled, 2 = Pending
+	if purchase.PurchaseState != 0 {
+		writeJSON(w, http.StatusOK, verifyResponse{Valid: false, BumpsGranted: 0})
+		return
+	}
 
 	writeJSON(w, http.StatusOK, verifyResponse{
 		Valid:        true,

@@ -68,7 +68,7 @@ func main() {
 	mux.Handle("/session", handlers.NewSessionHandler(signer, queries, limiter, cfg.MaxSessionsHour))
 	mux.Handle("/config", handlers.NewConfigHandler(queries, cfg.TimeWindowSec, cfg.MinRSSI, cfg.MinAppVersion, cfg.MaxSessionsHour, cfg.KillSwitch))
 	mux.Handle("/report", handlers.NewReportHandler(queries))
-	mux.Handle("/verify", handlers.NewVerifyHandler())
+	mux.Handle("/verify", handlers.NewVerifyHandler(cfg.GooglePlayServiceAcctJSON))
 
 	// Health check for Fly.io
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

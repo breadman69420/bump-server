@@ -1,6 +1,6 @@
 # fly.toml — Bump server deployment config
 
-app = "bump-server"
+app = "bump"
 primary_region = "iad"
 
 [build]

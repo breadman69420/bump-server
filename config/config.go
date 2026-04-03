@@ -6,15 +6,16 @@ import (
 )
 
 type Config struct {
-	Port            string
-	DatabaseURL     string
-	RedisURL        string
-	Ed25519PrivKey  string // base64-encoded private key
-	MaxSessionsHour int
-	TimeWindowSec   int
-	MinRSSI         int
-	MinAppVersion   int
-	KillSwitch      bool
+	Port                      string
+	DatabaseURL               string
+	RedisURL                  string
+	Ed25519PrivKey            string // base64-encoded private key
+	MaxSessionsHour           int
+	TimeWindowSec             int
+	MinRSSI                   int
+	MinAppVersion             int
+	KillSwitch                bool
+	GooglePlayServiceAcctJSON string // JSON credentials for Google Play Developer API
 }
 
 func Load() *Config {
@@ -27,7 +28,8 @@ func Load() *Config {
 		TimeWindowSec:   envIntOrDefault("TIME_WINDOW_SEC", 15),
 		MinRSSI:         envIntOrDefault("MIN_RSSI", -75),
 		MinAppVersion:   envIntOrDefault("MIN_APP_VERSION", 1),
-		KillSwitch:      os.Getenv("KILL_SWITCH") == "true",
+		KillSwitch:                os.Getenv("KILL_SWITCH") == "true",
+		GooglePlayServiceAcctJSON: os.Getenv("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"),
 	}
 }
 
