@@ -33,6 +33,16 @@ CREATE TABLE IF NOT EXISTS verified_purchases (
     verified_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Paid bump balance per device, persistent across app reinstalls and
+-- local data clears. Free daily bumps are tracked in Redis (daily: key
+-- with midnight UTC TTL). Paid balance is decremented here only after
+-- the free daily allowance is exhausted.
+CREATE TABLE IF NOT EXISTS device_bumps (
+    device_hash VARCHAR(32) PRIMARY KEY,
+    paid_balance INTEGER NOT NULL DEFAULT 0 CHECK (paid_balance >= 0),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Automatic cleanup: delete session logs older than 7 days
 -- Run via pg_cron or application-level scheduled task
 -- DELETE FROM session_log WHERE requested_at < NOW() - INTERVAL '7 days';

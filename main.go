@@ -63,9 +63,15 @@ func main() {
 		}
 	}()
 
+	// Log dev allowlist size at startup so it's obvious if the env var is set wrong
+	if len(cfg.DevDeviceHashes) > 0 {
+		log.Printf("Dev device allowlist active: %d hash(es) bypass daily bump limit", len(cfg.DevDeviceHashes))
+	}
+
 	// Routes
 	mux := http.NewServeMux()
-	mux.Handle("/session", handlers.NewSessionHandler(signer, queries, limiter, cfg.MaxSessionsHour))
+	mux.Handle("/session", handlers.NewSessionHandler(signer, queries, limiter, cfg.MaxSessionsHour, cfg.FreeBumpsPerDay, cfg.DevDeviceHashes))
+	mux.Handle("/bumps", handlers.NewBumpsHandler(queries, limiter, cfg.FreeBumpsPerDay, cfg.DevDeviceHashes))
 	mux.Handle("/config", handlers.NewConfigHandler(queries, cfg.TimeWindowSec, cfg.MinRSSI, cfg.MinAppVersion, cfg.MaxSessionsHour, cfg.KillSwitch))
 	mux.Handle("/report", handlers.NewReportHandler(queries))
 	mux.Handle("/verify", handlers.NewVerifyHandler(cfg.GooglePlayServiceAcctJSON, queries, limiter))

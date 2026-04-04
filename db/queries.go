@@ -129,3 +129,47 @@ func (q *Queries) CleanupOldSessions(ctx context.Context) (int64, error) {
 	}
 	return result.RowsAffected()
 }
+
+// GetPaidBumps returns the paid bump balance for a device (0 if no row exists).
+func (q *Queries) GetPaidBumps(ctx context.Context, deviceHash string) (int, error) {
+	var balance int
+	err := q.db.QueryRowContext(ctx,
+		`SELECT paid_balance FROM device_bumps WHERE device_hash = $1`,
+		deviceHash,
+	).Scan(&balance)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return balance, err
+}
+
+// IncrementPaidBumps atomically adds `delta` to a device's paid balance,
+// creating the row if needed. Called from the verify handler.
+func (q *Queries) IncrementPaidBumps(ctx context.Context, deviceHash string, delta int) error {
+	_, err := q.db.ExecContext(ctx,
+		`INSERT INTO device_bumps (device_hash, paid_balance)
+		 VALUES ($1, $2)
+		 ON CONFLICT (device_hash)
+		 DO UPDATE SET paid_balance = device_bumps.paid_balance + EXCLUDED.paid_balance,
+		               updated_at = NOW()`,
+		deviceHash, delta,
+	)
+	return err
+}
+
+// TryConsumePaidBump atomically decrements the paid balance by 1 if
+// the balance is currently > 0. Returns true if consumed, false if
+// the device had no paid bumps to spend.
+func (q *Queries) TryConsumePaidBump(ctx context.Context, deviceHash string) (bool, error) {
+	result, err := q.db.ExecContext(ctx,
+		`UPDATE device_bumps
+		 SET paid_balance = paid_balance - 1, updated_at = NOW()
+		 WHERE device_hash = $1 AND paid_balance > 0`,
+		deviceHash,
+	)
+	if err != nil {
+		return false, err
+	}
+	rows, _ := result.RowsAffected()
+	return rows > 0, nil
+}

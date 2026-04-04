@@ -60,6 +60,7 @@ type verifyRequest struct {
 type verifyResponse struct {
 	Valid        bool `json:"valid"`
 	BumpsGranted int  `json:"bumps_granted"`
+	PaidBalance  int  `json:"paid_balance"` // device's total paid balance after this purchase
 }
 
 func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -115,11 +116,18 @@ func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// If no service account configured, accept for development/testing
 	if h.service == nil {
 		if err := h.queries.RecordVerifiedPurchase(ctx, req.PurchaseToken, req.DeviceHash, req.ProductID); err != nil {
-		log.Printf("Failed to record verified purchase for %s: %v", req.DeviceHash, err)
-	}
+			log.Printf("Failed to record verified purchase for %s: %v", req.DeviceHash, err)
+		}
+		if err := h.queries.IncrementPaidBumps(ctx, req.DeviceHash, 1); err != nil {
+			log.Printf("Failed to increment paid balance for %s: %v", req.DeviceHash, err)
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "service temporarily unavailable"})
+			return
+		}
+		balance, _ := h.queries.GetPaidBumps(ctx, req.DeviceHash)
 		writeJSON(w, http.StatusOK, verifyResponse{
 			Valid:        true,
 			BumpsGranted: 1,
+			PaidBalance:  balance,
 		})
 		return
 	}
@@ -145,8 +153,17 @@ func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed to record verified purchase for %s: %v", req.DeviceHash, err)
 	}
 
+	// Atomically add paid bumps to the device's balance.
+	if err := h.queries.IncrementPaidBumps(ctx, req.DeviceHash, 1); err != nil {
+		log.Printf("Failed to increment paid balance for %s: %v", req.DeviceHash, err)
+		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "service temporarily unavailable"})
+		return
+	}
+	balance, _ := h.queries.GetPaidBumps(ctx, req.DeviceHash)
+
 	writeJSON(w, http.StatusOK, verifyResponse{
 		Valid:        true,
 		BumpsGranted: 1,
+		PaidBalance:  balance,
 	})
 }

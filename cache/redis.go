@@ -63,11 +63,10 @@ func (r *RateLimiter) CheckRateLimit(ctx context.Context, deviceHash string, max
 	return true, currentCount, 0
 }
 
-// GetDailySessionCount returns the number of sessions today for a device.
-// Uses a separate key with midnight expiry.
-func (r *RateLimiter) GetDailySessionCount(ctx context.Context, deviceHash string) (int, error) {
+// GetDailyFreeBumpsUsed returns the number of free bumps used today for a device.
+// Counter resets at midnight UTC.
+func (r *RateLimiter) GetDailyFreeBumpsUsed(ctx context.Context, deviceHash string) (int, error) {
 	key := "daily:" + deviceHash
-
 	count, err := r.client.Get(ctx, key).Int()
 	if err == redis.Nil {
 		return 0, nil
@@ -75,21 +74,47 @@ func (r *RateLimiter) GetDailySessionCount(ctx context.Context, deviceHash strin
 	return count, err
 }
 
-// IncrementDailySession increments the daily session counter.
-func (r *RateLimiter) IncrementDailySession(ctx context.Context, deviceHash string) error {
+// Lua script: atomically increment daily free-bump counter if below limit.
+// KEYS[1] = the daily counter key
+// ARGV[1] = limit (free bumps per day)
+// ARGV[2] = TTL seconds until midnight UTC
+// Returns: new count (>=1 and <=limit) on success, -1 if already at limit.
+var consumeFreeBumpScript = redis.NewScript(`
+local key = KEYS[1]
+local limit = tonumber(ARGV[1])
+local ttl = tonumber(ARGV[2])
+
+local current = tonumber(redis.call('GET', key) or '0')
+if current >= limit then
+  return -1
+end
+
+local count = redis.call('INCR', key)
+if count == 1 then
+  redis.call('EXPIRE', key, ttl)
+end
+return count
+`)
+
+// TryConsumeFreeBump atomically consumes one free bump for today if the
+// daily limit has not been reached. Returns (newCount, true) on success
+// or (currentCount, false) if already at limit.
+func (r *RateLimiter) TryConsumeFreeBump(ctx context.Context, deviceHash string, limit int) (int, bool, error) {
 	key := "daily:" + deviceHash
 
-	pipe := r.client.Pipeline()
-	pipe.Incr(ctx, key)
-
-	// Calculate seconds until midnight UTC
+	// Calculate seconds until midnight UTC (key resets at midnight)
 	now := time.Now().UTC()
 	midnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
-	ttl := midnight.Sub(now)
-	pipe.Expire(ctx, key, ttl)
+	ttl := int(midnight.Sub(now).Seconds())
 
-	_, err := pipe.Exec(ctx)
-	return err
+	result, err := consumeFreeBumpScript.Run(ctx, r.client, []string{key}, limit, ttl).Int()
+	if err != nil {
+		return 0, false, err
+	}
+	if result < 0 {
+		return limit, false, nil
+	}
+	return result, true, nil
 }
 
 func (r *RateLimiter) Close() error {
