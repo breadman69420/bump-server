@@ -108,13 +108,40 @@ func (q *Queries) IsPurchaseVerified(ctx context.Context, purchaseToken string) 
 }
 
 // RecordVerifiedPurchase stores a verified purchase token to prevent replay.
-func (q *Queries) RecordVerifiedPurchase(ctx context.Context, purchaseToken, deviceHash, productID string) error {
-	_, err := q.db.ExecContext(ctx,
+// Returns (inserted, err): inserted=true means this is the first time this
+// token has been recorded; inserted=false means it was already present and
+// the INSERT was a no-op (ON CONFLICT DO NOTHING).
+func (q *Queries) RecordVerifiedPurchase(ctx context.Context, purchaseToken, deviceHash, productID string) (bool, error) {
+	result, err := q.db.ExecContext(ctx,
 		`INSERT INTO verified_purchases (purchase_token, device_hash, product_id) VALUES ($1, $2, $3)
 		 ON CONFLICT (purchase_token) DO NOTHING`,
 		purchaseToken, deviceHash, productID,
 	)
-	return err
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rows > 0, nil
+}
+
+// RecordVerifiedPurchaseTx is the transactional version for the verify handler.
+func (q *Queries) RecordVerifiedPurchaseTx(ctx context.Context, tx *sql.Tx, purchaseToken, deviceHash, productID string) (bool, error) {
+	result, err := tx.ExecContext(ctx,
+		`INSERT INTO verified_purchases (purchase_token, device_hash, product_id) VALUES ($1, $2, $3)
+		 ON CONFLICT (purchase_token) DO NOTHING`,
+		purchaseToken, deviceHash, productID,
+	)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rows > 0, nil
 }
 
 // CleanupOldSessions deletes session logs older than 7 days.
@@ -144,17 +171,42 @@ func (q *Queries) GetPaidBumps(ctx context.Context, deviceHash string) (int, err
 }
 
 // IncrementPaidBumps atomically adds `delta` to a device's paid balance,
-// creating the row if needed. Called from the verify handler.
-func (q *Queries) IncrementPaidBumps(ctx context.Context, deviceHash string, delta int) error {
-	_, err := q.db.ExecContext(ctx,
+// creating the row if needed. Returns the new paid_balance post-update so
+// callers don't need a separate SELECT (which would race against concurrent
+// /session TryConsumePaidBump decrements).
+func (q *Queries) IncrementPaidBumps(ctx context.Context, deviceHash string, delta int) (int, error) {
+	var newBalance int
+	err := q.db.QueryRowContext(ctx,
 		`INSERT INTO device_bumps (device_hash, paid_balance)
 		 VALUES ($1, $2)
 		 ON CONFLICT (device_hash)
 		 DO UPDATE SET paid_balance = device_bumps.paid_balance + EXCLUDED.paid_balance,
-		               updated_at = NOW()`,
+		               updated_at = NOW()
+		 RETURNING paid_balance`,
 		deviceHash, delta,
-	)
-	return err
+	).Scan(&newBalance)
+	return newBalance, err
+}
+
+// IncrementPaidBumpsTx is the transactional version for the verify handler.
+func (q *Queries) IncrementPaidBumpsTx(ctx context.Context, tx *sql.Tx, deviceHash string, delta int) (int, error) {
+	var newBalance int
+	err := tx.QueryRowContext(ctx,
+		`INSERT INTO device_bumps (device_hash, paid_balance)
+		 VALUES ($1, $2)
+		 ON CONFLICT (device_hash)
+		 DO UPDATE SET paid_balance = device_bumps.paid_balance + EXCLUDED.paid_balance,
+		               updated_at = NOW()
+		 RETURNING paid_balance`,
+		deviceHash, delta,
+	).Scan(&newBalance)
+	return newBalance, err
+}
+
+// BeginTx exposes the underlying sql.DB's BeginTx for handlers that need
+// to wrap multiple writes in a single transaction (e.g. the verify flow).
+func (q *Queries) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	return q.db.BeginTx(ctx, nil)
 }
 
 // TryConsumePaidBump atomically decrements the paid balance by 1 if

@@ -56,10 +56,18 @@ type sessionResponse struct {
 }
 
 type errorResponse struct {
-	Error         string `json:"error,omitempty"`
-	RetryAfter    int    `json:"retry_after,omitempty"`
-	FreeRemaining int    `json:"free_remaining,omitempty"`
-	PaidBalance   int    `json:"paid_balance,omitempty"`
+	Error      string `json:"error,omitempty"`
+	RetryAfter int    `json:"retry_after,omitempty"`
+}
+
+// outOfBumpsResponse is the dedicated 403 body for /session when a device
+// has no bumps left. Fields do NOT use `omitempty` because the client relies
+// on seeing literal "free_remaining":0/"paid_balance":0 for UI sync — dropping
+// those zeros would break the contract (audit finding C2).
+type outOfBumpsResponse struct {
+	Error         string `json:"error"`
+	FreeRemaining int    `json:"free_remaining"`
+	PaidBalance   int    `json:"paid_balance"`
 }
 
 func (h *SessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -138,9 +146,10 @@ func (h *SessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if !consumed {
-				// Out of free AND paid bumps. Deny.
+				// Out of free AND paid bumps. Deny. Use the dedicated struct
+				// so zero counts are not stripped by json:",omitempty".
 				paid, _ := h.queries.GetPaidBumps(ctx, req.DeviceHash)
-				writeJSON(w, http.StatusForbidden, errorResponse{
+				writeJSON(w, http.StatusForbidden, outOfBumpsResponse{
 					Error:         "out_of_bumps",
 					FreeRemaining: 0,
 					PaidBalance:   paid, // should be 0, echo for client sync
