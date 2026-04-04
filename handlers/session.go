@@ -107,24 +107,27 @@ func (h *SessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(5 * time.Second)
 	}
 
-	// Rate limiting (hourly request cap, independent of daily bump quota)
-	allowed, _, delay := h.limiter.CheckRateLimit(ctx, req.DeviceHash, h.maxHour)
-	if !allowed {
-		writeJSON(w, http.StatusTooManyRequests, errorResponse{RetryAfter: 60})
-		return
-	}
-
-	// Progressive throttle
-	if delay > 0 {
-		time.Sleep(delay)
-	}
-
-	// ---- Daily bump enforcement ----
-	// Dev devices bypass all quota checks so we can test freely in prod.
+	// Dev devices bypass ALL quota checks (hourly rate limit AND daily bump
+	// quota) so we can test freely in prod. Keeping the isDev check above
+	// CheckRateLimit matches the promise in the startup log message: dev
+	// allowlist devices are fully exempt, not just quota-exempt.
 	isDev := h.devAllowlist[req.DeviceHash]
 
 	var freeRemaining, paidBalance int
 	if !isDev {
+		// Rate limiting (hourly request cap, independent of daily bump quota)
+		allowed, _, delay := h.limiter.CheckRateLimit(ctx, req.DeviceHash, h.maxHour)
+		if !allowed {
+			writeJSON(w, http.StatusTooManyRequests, errorResponse{RetryAfter: 60})
+			return
+		}
+
+		// Progressive throttle
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+
+		// ---- Daily bump enforcement ----
 		// Try to consume a free bump first.
 		freeUsed, freeOk, err := h.limiter.TryConsumeFreeBump(ctx, req.DeviceHash, h.freeBumpsPerDay)
 		if err != nil {

@@ -90,9 +90,10 @@ if current >= limit then
 end
 
 local count = redis.call('INCR', key)
-if count == 1 then
-  redis.call('EXPIRE', key, ttl)
-end
+-- Always refresh TTL. Re-applying on every INCR is cheap and defensive:
+-- if a key somehow exists without a TTL (Redis restart from RDB, manual
+-- set, bug), this ensures the counter still resets at midnight UTC.
+redis.call('EXPIRE', key, ttl)
 return count
 `)
 

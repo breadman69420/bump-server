@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/ttalvac/bump-server/cache"
@@ -63,8 +64,12 @@ func (h *BumpsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	used, err := h.limiter.GetDailyFreeBumpsUsed(ctx, deviceHash)
 	if err != nil {
-		// Fail open — return max free. Redis hiccups shouldn't lock users out of UI.
-		used = 0
+		// Fail closed — matches /session's behavior on Redis error. Previously
+		// we returned full quota (fail-open) which would have the UI showing
+		// 3 bumps while /session denies every tap during a Redis outage.
+		log.Printf("redis error on /bumps for %s: %v", deviceHash, err)
+		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "service temporarily unavailable"})
+		return
 	}
 	freeRemaining := h.freeBumpsPerDay - used
 	if freeRemaining < 0 {

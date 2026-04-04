@@ -21,13 +21,14 @@ const packageName = "me.getbump.app"
 // VerifyHandler handles Google Play purchase verification
 // using the Google Play Developer API.
 type VerifyHandler struct {
-	service *androidpublisher.Service
-	queries *db.Queries
-	limiter *cache.RateLimiter
+	service         *androidpublisher.Service
+	queries         *db.Queries
+	limiter         *cache.RateLimiter
+	freeBumpsPerDay int
 }
 
-func NewVerifyHandler(serviceAccountJSON string, queries *db.Queries, limiter *cache.RateLimiter) *VerifyHandler {
-	h := &VerifyHandler{queries: queries, limiter: limiter}
+func NewVerifyHandler(serviceAccountJSON string, queries *db.Queries, limiter *cache.RateLimiter, freeBumpsPerDay int) *VerifyHandler {
+	h := &VerifyHandler{queries: queries, limiter: limiter, freeBumpsPerDay: freeBumpsPerDay}
 
 	if serviceAccountJSON != "" {
 		conf, err := google.JWTConfigFromJSON(
@@ -58,9 +59,10 @@ type verifyRequest struct {
 }
 
 type verifyResponse struct {
-	Valid        bool `json:"valid"`
-	BumpsGranted int  `json:"bumps_granted"`
-	PaidBalance  int  `json:"paid_balance"` // device's total paid balance after this purchase
+	Valid         bool `json:"valid"`
+	BumpsGranted  int  `json:"bumps_granted"`
+	PaidBalance   int  `json:"paid_balance"`   // device's total paid balance after this purchase
+	FreeRemaining int  `json:"free_remaining"` // free bumps left today, for client UI sync
 }
 
 func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -128,9 +130,10 @@ func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, verifyResponse{
-			Valid:        true,
-			BumpsGranted: 1,
-			PaidBalance:  balance,
+			Valid:         true,
+			BumpsGranted:  1,
+			PaidBalance:   balance,
+			FreeRemaining: h.computeFreeRemaining(ctx, req.DeviceHash),
 		})
 		return
 	}
@@ -164,10 +167,29 @@ func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, verifyResponse{
-		Valid:        true,
-		BumpsGranted: 1,
-		PaidBalance:  balance,
+		Valid:         true,
+		BumpsGranted:  1,
+		PaidBalance:   balance,
+		FreeRemaining: h.computeFreeRemaining(ctx, req.DeviceHash),
 	})
+}
+
+// computeFreeRemaining returns today's remaining free bumps for a device, or
+// 0 on any Redis error. We intentionally swallow the error (and log it) rather
+// than failing the verify response — the purchase has already committed, so
+// the client should still be told about its new paid balance even if we can't
+// report the free count accurately.
+func (h *VerifyHandler) computeFreeRemaining(ctx context.Context, deviceHash string) int {
+	used, err := h.limiter.GetDailyFreeBumpsUsed(ctx, deviceHash)
+	if err != nil {
+		log.Printf("verify: failed to read daily free count for %s: %v", deviceHash, err)
+		return 0
+	}
+	remaining := h.freeBumpsPerDay - used
+	if remaining < 0 {
+		remaining = 0
+	}
+	return remaining
 }
 
 // creditPurchase atomically records a verified purchase and credits the
