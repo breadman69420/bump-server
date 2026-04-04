@@ -76,8 +76,11 @@
         <a href="/" class="back">&larr; back to bump</a>
 
         <h1>privacy policy</h1>
-        <p class="updated">last updated: april 2, 2026</p>
+        <p class="updated">last updated: april 4, 2026</p>
 
+        <p>
+            share what you want to share. nothing more.
+        </p>
         <p>
             bump is designed to share as little data as possible. we built it this way on purpose.
             here's exactly what happens with your information.
@@ -93,13 +96,16 @@
             <li>the content of any interaction between users</li>
         </ul>
 
-        <h2>what we do process</h2>
-        <p>to make bump work and prevent abuse, our server processes:</p>
-        <ul>
-            <li><strong>a one-way device hash</strong> — derived from your android id with an app-specific salt. we cannot reverse this to identify you or your device.</li>
-            <li><strong>timestamps</strong> — when you request a session token. used for rate limiting (max 10 per hour) and abuse detection.</li>
-            <li><strong>abuse reports</strong> — if someone reports a user, we store the reporter's device hash, the reported device hash, and a reason category. no personal information is included.</li>
-        </ul>
+        <h2>how sharing works</h2>
+        <p>
+            you choose what to share — a phone number, an instagram handle, a linkedin, a snapchat.
+            nothing is shared until both people commit. neither person sees the other's info until
+            both have sent. if one person walks away, neither sees anything.
+        </p>
+        <p>
+            phone numbers are pulled directly from your SIM card via google's phone number hint api.
+            there is no option to type a number manually — what you share is what's on your SIM.
+        </p>
 
         <h2>how bluetooth works in bump</h2>
         <p>
@@ -108,9 +114,22 @@
             using AES-256-GCM with keys derived via HKDF from one-time session tokens.
         </p>
         <p>
+            before any personal data is shared, the two phones negotiate what to do — exchange info,
+            play a quick game, or answer rapid-fire questions. these interaction preferences contain
+            no personal information and are also encrypted.
+        </p>
+        <p>
             received information is displayed for 15 seconds, then permanently erased from memory.
             screenshots and screen recording are blocked during this window.
         </p>
+
+        <h2>what we do process</h2>
+        <p>to make bump work and prevent abuse, our server processes:</p>
+        <ul>
+            <li><strong>a one-way device hash</strong> — derived from your android id with an app-specific salt. we cannot reverse this to identify you or your device.</li>
+            <li><strong>timestamps</strong> — when you request a session token. used for rate limiting (max 10 per hour) and abuse detection.</li>
+            <li><strong>abuse reports</strong> — if someone reports a user, we store the reporter's device hash, the reported device hash, and a reason category. no personal information is included.</li>
+        </ul>
 
         <h2>data retention</h2>
         <ul>
