@@ -42,10 +42,11 @@ type reportRequest struct {
 }
 
 var validReasons = map[string]bool{
-	"harassment": true,
-	"spam":       true,
-	"safety":     true,
-	"other":      true,
+	"harassment":   true,
+	"child_safety": true, // CSAE / child endangerment — triaged at top priority
+	"spam":         true,
+	"safety":       true,
+	"other":        true,
 }
 
 func (h *ReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
