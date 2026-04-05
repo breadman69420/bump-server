@@ -123,6 +123,11 @@ func main() {
 	mux.HandleFunc("/privacy/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "static/privacy/index.html")
 	})
+	// Public video assets (e.g., permission-declaration demos for Play Console).
+	// Served from static/videos/ via http.FileServer so new files can be dropped
+	// in without a code change. Scoped tightly to /videos/ so it cannot be used
+	// to escape the static directory.
+	mux.Handle("/videos/", http.StripPrefix("/videos/", http.FileServer(http.Dir("static/videos"))))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
