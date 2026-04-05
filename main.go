@@ -123,6 +123,15 @@ func main() {
 	mux.HandleFunc("/privacy/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "static/privacy/index.html")
 	})
+	// Child Safety Standards page — required by Play Console for all apps in
+	// the Social and Dating categories under Google's CSAE policy. Keeping it
+	// at /safety so the URL is short enough to paste cleanly into the form.
+	mux.HandleFunc("/safety", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/safety/index.html")
+	})
+	mux.HandleFunc("/safety/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/safety/index.html")
+	})
 	// Public video assets (e.g., permission-declaration demos for Play Console).
 	// Served from static/videos/ via http.FileServer so new files can be dropped
 	// in without a code change. Scoped tightly to /videos/ so it cannot be used
