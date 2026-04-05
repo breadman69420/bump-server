@@ -71,6 +71,7 @@ func main() {
 	// Routes
 	mux := http.NewServeMux()
 	mux.Handle("/session", handlers.NewSessionHandler(signer, queries, limiter, cfg.MaxSessionsHour, cfg.FreeBumpsPerDay, cfg.DevDeviceHashes))
+	mux.Handle("/session/commit", handlers.NewSessionCommitHandler(queries, limiter, cfg.FreeBumpsPerDay, cfg.DevDeviceHashes))
 	mux.Handle("/bumps", handlers.NewBumpsHandler(queries, limiter, cfg.FreeBumpsPerDay, cfg.DevDeviceHashes))
 	mux.Handle("/config", handlers.NewConfigHandler(queries, cfg.TimeWindowSec, cfg.MinRSSI, cfg.MinAppVersion, cfg.MaxSessionsHour, cfg.KillSwitch))
 	mux.Handle("/report", handlers.NewReportHandler(queries))

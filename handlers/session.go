@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -51,8 +52,22 @@ type sessionRequest struct {
 type sessionResponse struct {
 	Token         string `json:"token"`
 	ServerTime    int64  `json:"server_time"`
-	FreeRemaining int    `json:"free_remaining"` // free bumps left today after consuming this one
-	PaidBalance   int    `json:"paid_balance"`   // paid bumps left after consuming this one
+	SessionID     string `json:"session_id"`     // opaque id the client echoes back to /session/commit
+	FreeRemaining int    `json:"free_remaining"` // committed balance at /session time (not decremented until commit)
+	PaidBalance   int    `json:"paid_balance"`   // committed balance at /session time
+}
+
+// newSessionID generates an opaque 32-char hex token used as the
+// reservation/commit handle. 16 bytes of randomness is more than enough
+// to make guessing a live sid infeasible and is symmetric with the
+// existing hex device_hash format so middleware.IsValidDeviceHash can
+// double as the validator on the commit endpoint.
+func newSessionID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b[:]), nil
 }
 
 type errorResponse struct {
@@ -113,9 +128,22 @@ func (h *SessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// allowlist devices are fully exempt, not just quota-exempt.
 	isDev := h.devAllowlist[req.DeviceHash]
 
+	// Generate a fresh session id up front — every /session response carries
+	// one, even for dev-bypass paths, so the client's reserve→commit flow is
+	// uniform regardless of allowlist status.
+	sessionID, err := newSessionID()
+	if err != nil {
+		log.Printf("session id generation failed: %v", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "session id generation failed"})
+		return
+	}
+
 	var freeRemaining, paidBalance int
 	if !isDev {
-		// Rate limiting (hourly request cap, independent of daily bump quota)
+		// Rate limiting (hourly request cap, independent of daily bump quota).
+		// We keep this on /session (not /session/commit) so a malicious
+		// client that never commits is still bounded — they can create at
+		// most maxPerHour reservations per hour, all of which expire in 60s.
 		allowed, _, delay := h.limiter.CheckRateLimit(ctx, req.DeviceHash, h.maxHour)
 		if !allowed {
 			writeJSON(w, http.StatusTooManyRequests, errorResponse{RetryAfter: 60})
@@ -127,31 +155,42 @@ func (h *SessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(delay)
 		}
 
-		// ---- Daily bump enforcement ----
-		// Try to consume a free bump first.
-		freeUsed, freeOk, err := h.limiter.TryConsumeFreeBump(ctx, req.DeviceHash, h.freeBumpsPerDay)
+		// ---- Daily bump reservation ----
+		// /session no longer decrements any counter — it reserves a slot.
+		// The atomic decrement happens at /session/commit after the client
+		// proves a successful BLE match (SessionState.Ready). Unclaimed
+		// reservations expire naturally in 60s. The response's
+		// free_remaining / paid_balance reflect the CURRENT COMMITTED
+		// balance so the UI doesn't lie about post-commit state.
+		//
+		// Order: try free first (reserve), else try paid (reserve marker
+		// only — paid balance check is at commit time because Postgres
+		// can't cheaply peek without mutating).
+		freeUsed, freeOk, err := h.limiter.TryReserveFreeBump(ctx, req.DeviceHash, sessionID, h.freeBumpsPerDay)
 		if err != nil {
-			log.Printf("free bump check failed for %s: %v", req.DeviceHash, err)
+			log.Printf("free bump reserve failed for %s: %v", req.DeviceHash, err)
 			writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "service temporarily unavailable"})
 			return
 		}
 
 		if freeOk {
-			// Successfully consumed a free bump.
 			freeRemaining = h.freeBumpsPerDay - freeUsed
 			paidBalance, _ = h.queries.GetPaidBumps(ctx, req.DeviceHash)
 		} else {
-			// No free bumps left — try paid balance.
-			consumed, err := h.queries.TryConsumePaidBump(ctx, req.DeviceHash)
+			// Daily free limit reached — check paid balance. We do a
+			// non-atomic read here to decide whether to issue a paid
+			// reservation; the atomic check-and-decrement happens at
+			// commit time. A rare TOCTOU loses a reservation to a 409 at
+			// commit, which the client treats as OutOfBumps. Acceptable.
+			paid, err := h.queries.GetPaidBumps(ctx, req.DeviceHash)
 			if err != nil {
-				log.Printf("paid bump consume failed for %s: %v", req.DeviceHash, err)
+				log.Printf("paid bump read failed for %s: %v", req.DeviceHash, err)
 				writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "service temporarily unavailable"})
 				return
 			}
-			if !consumed {
+			if paid <= 0 {
 				// Out of free AND paid bumps. Deny. Use the dedicated struct
 				// so zero counts are not stripped by json:",omitempty".
-				paid, _ := h.queries.GetPaidBumps(ctx, req.DeviceHash)
 				writeJSON(w, http.StatusForbidden, outOfBumpsResponse{
 					Error:         "out_of_bumps",
 					FreeRemaining: 0,
@@ -159,12 +198,17 @@ func (h *SessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				})
 				return
 			}
-			// Paid consumed successfully.
+			if err := h.limiter.ReservePaidBump(ctx, req.DeviceHash, sessionID); err != nil {
+				log.Printf("paid bump reserve failed for %s: %v", req.DeviceHash, err)
+				writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "service temporarily unavailable"})
+				return
+			}
 			freeRemaining = 0
-			paidBalance, _ = h.queries.GetPaidBumps(ctx, req.DeviceHash)
+			paidBalance = paid
 		}
 	} else {
-		// Dev bypass — return sentinel "unlimited" values.
+		// Dev bypass — return sentinel "unlimited" values. No reservation
+		// is written; /session/commit for a dev device hash is a no-op.
 		freeRemaining = h.freeBumpsPerDay
 		paidBalance, _ = h.queries.GetPaidBumps(ctx, req.DeviceHash)
 	}
@@ -189,6 +233,7 @@ func (h *SessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sessionResponse{
 		Token:         base64.StdEncoding.EncodeToString(token),
 		ServerTime:    serverTime,
+		SessionID:     sessionID,
 		FreeRemaining: freeRemaining,
 		PaidBalance:   paidBalance,
 	})
