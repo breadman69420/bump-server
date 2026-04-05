@@ -76,7 +76,7 @@
         <a href="/" class="back">&larr; back to bump</a>
 
         <h1>privacy policy</h1>
-        <p class="updated">last updated: april 4, 2026</p>
+        <p class="updated">last updated: april 5, 2026</p>
 
         <p>
             share what you want to share. nothing more.
@@ -161,11 +161,36 @@
             collect any information from minors.
         </p>
 
-        <h2>your rights</h2>
+        <h2 id="data-deletion">data deletion</h2>
         <p>
-            since we don't collect personal data, there's nothing to request, correct, or delete.
-            if you believe we have information about you in error, contact us and we'll investigate.
+            bump does not have user accounts, so there is no "delete account" button to press.
+            the only data we hold that is tied to your phone is a <strong>one-way device hash</strong> —
+            a salted sha-256 of your android id that we cannot reverse to identify you. if you
+            want us to delete that hash and any records associated with it, follow these steps.
         </p>
+        <p><strong>how to request deletion:</strong></p>
+        <ul>
+            <li>email <a href="mailto:bumpnowapp@gmail.com?subject=data%20deletion%20request">bumpnowapp@gmail.com</a> with the subject line "data deletion request"</li>
+            <li>you do not need to tell us who you are — include the approximate date and time of any sessions you want purged, and note whether you were involved in any abuse report</li>
+            <li>we will confirm deletion within 30 days</li>
+        </ul>
+        <p><strong>what gets deleted on request:</strong></p>
+        <ul>
+            <li>your device hash</li>
+            <li>any entries in our abuse-report tables that reference your device hash</li>
+            <li>any remaining session-token records issued to your device hash</li>
+        </ul>
+        <p><strong>what is automatically deleted regardless of any request:</strong></p>
+        <ul>
+            <li>session logs (device hash + timestamp) are purged after <strong>7 days</strong></li>
+            <li>session tokens expire after <strong>60 seconds</strong> and are purged from memory</li>
+            <li>contact info you exchanged with another person lives for <strong>15 seconds</strong> on the receiving phone, then is erased — it never reaches our servers at any point</li>
+        </ul>
+        <p><strong>what we cannot delete:</strong></p>
+        <ul>
+            <li><strong>google play billing records</strong> — your purchase history is held by google, not by us. to request deletion of those records, contact google play support</li>
+            <li><strong>records held by another user</strong> — contact information you chose to share with someone lives on their device, not ours, and we have no way to reach into it</li>
+        </ul>
 
         <h2>law enforcement</h2>
         <p>
