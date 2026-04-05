@@ -17,8 +17,14 @@ type Config struct {
 	MinRSSI                   int
 	MinAppVersion             int
 	KillSwitch                bool
-	GooglePlayServiceAcctJSON string // JSON credentials for Google Play Developer API
+	GooglePlayServiceAcctJSON string          // JSON credentials for Google Play Developer API
 	DevDeviceHashes           map[string]bool // allowlist of dev device hashes that bypass daily limits
+	// DevMode, when true, disables the production safety check that refuses
+	// to start without GOOGLE_PLAY_SERVICE_ACCOUNT_JSON. Set explicitly via
+	// BUMP_DEV_MODE=true for local development only. In production this
+	// MUST be unset; if it is set in production every /verify request will
+	// credit paid bumps without contacting Google Play.
+	DevMode bool
 }
 
 func Load() *Config {
@@ -35,6 +41,7 @@ func Load() *Config {
 		KillSwitch:                os.Getenv("KILL_SWITCH") == "true",
 		GooglePlayServiceAcctJSON: os.Getenv("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"),
 		DevDeviceHashes:           parseDeviceHashList(os.Getenv("BUMP_DEV_DEVICE_HASHES")),
+		DevMode:                   os.Getenv("BUMP_DEV_MODE") == "true",
 	}
 }
 

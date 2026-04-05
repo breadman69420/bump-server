@@ -44,9 +44,13 @@ func NewSessionHandler(
 }
 
 type sessionRequest struct {
-	DeviceHash     string `json:"device_hash"`
-	ClientTime     int64  `json:"client_time"`
-	IntegrityToken string `json:"integrity_token"`
+	DeviceHash string `json:"device_hash"`
+	ClientTime int64  `json:"client_time"`
+	// NOTE: `integrity_token` was previously accepted but never validated.
+	// It is removed entirely rather than kept as dead API surface. If Play
+	// Integrity verification is added later, decode the token in a new
+	// handler step that actually rejects failing verdicts; do not
+	// resurrect a field that the server merely tolerates.
 }
 
 type sessionResponse struct {
@@ -113,13 +117,18 @@ func (h *SessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Check blocklist
+	// Check blocklist. Blocked devices are refused explicitly with 403 so
+	// the semantic is unambiguous for metrics, forensics, and the client —
+	// previously this path slept 5s and then issued a valid token that
+	// other clients would refuse via their cached /config blocklist, which
+	// was a confusing honeypot that gave blocked users a side channel
+	// (the 5s latency) while still consuming a server token slot. The
+	// client already treats 403 as an end state and shows a generic
+	// "unable to start session" error (BumpViewModel.kt:337).
 	blocked, err := h.queries.IsBlocked(ctx, req.DeviceHash)
 	if err == nil && blocked {
-		// Silent denial -- return a valid-looking delayed response
-		// that will never match anyone (the token is valid but the device
-		// is ignored by all other clients via remote config blocklist)
-		time.Sleep(5 * time.Second)
+		writeJSON(w, http.StatusForbidden, errorResponse{Error: "account_restricted"})
+		return
 	}
 
 	// Dev devices bypass ALL quota checks (hourly rate limit AND daily bump

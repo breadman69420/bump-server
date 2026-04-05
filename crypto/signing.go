@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -82,4 +83,37 @@ func (s *Signer) SignToken(deviceHash []byte) ([]byte, int64, error) {
 // PublicKeyBytes returns the raw 32-byte Ed25519 public key.
 func (s *Signer) PublicKeyBytes() []byte {
 	return []byte(s.publicKey)
+}
+
+// FormatKotlinByteArray renders a byte slice as a Kotlin `byteArrayOf(...)`
+// literal with signed-byte values (Kotlin bytes are int8, so values > 127
+// are printed as their negative two's-complement equivalent). 8 bytes per
+// line, matching the existing Android TokenVerifier.SERVER_PUBLIC_KEY
+// layout so a deploy log line can be byte-compared against the committed
+// constant without reformatting.
+func FormatKotlinByteArray(b []byte) string {
+	var sb strings.Builder
+	sb.WriteString("byteArrayOf(\n    ")
+	parts := make([]string, len(b))
+	for i, x := range b {
+		if x > 127 {
+			parts[i] = fmt.Sprintf("%d", int(x)-256)
+		} else {
+			parts[i] = fmt.Sprintf("%d", x)
+		}
+	}
+	for i := 0; i < len(parts); i += 8 {
+		end := i + 8
+		if end > len(parts) {
+			end = len(parts)
+		}
+		sb.WriteString(strings.Join(parts[i:end], ", "))
+		if end < len(parts) {
+			sb.WriteString(",\n    ")
+		} else {
+			sb.WriteString("\n")
+		}
+	}
+	sb.WriteString(")")
+	return sb.String()
 }

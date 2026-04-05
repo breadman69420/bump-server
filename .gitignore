@@ -1,0 +1,20 @@
+# Compiled Go binary
+/bump-server
+
+# Security — never commit secrets, keys, service accounts
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+service-account*.json
+bump-play-*.json
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Go test cache
+*.test

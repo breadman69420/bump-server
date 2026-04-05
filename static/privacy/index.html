@@ -110,8 +110,18 @@
         <h2>how bluetooth works in bump</h2>
         <p>
             all data exchange happens directly between two phones over bluetooth low energy (BLE).
-            your information never passes through our servers. the data is encrypted end-to-end
-            using AES-256-GCM with keys derived via HKDF from one-time session tokens.
+            the information you share never travels through our servers. on each device, the payload
+            is encrypted with AES-256-GCM using a session key derived via HKDF from server-issued,
+            short-lived session tokens.
+        </p>
+        <p>
+            we want to be precise about what this means: because our server issues the tokens that
+            seed the key derivation, it holds the cryptographic material that could in principle be
+            used to derive the same session key. in practice the server never receives the encrypted
+            exchange — it happens entirely over bluetooth between the two phones — so there is
+            nothing on our side to decrypt. if you want a guarantee that the server is
+            cryptographically incapable of reading exchanges even if it wanted to, bump is not that
+            product. what bump does guarantee is that exchanges do not transit our infrastructure.
         </p>
         <p>
             before any personal data is shared, the two phones negotiate what to do — exchange info,
