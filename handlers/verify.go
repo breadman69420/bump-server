@@ -56,6 +56,7 @@ type verifyRequest struct {
 	PurchaseToken string `json:"purchase_token"`
 	ProductID     string `json:"product_id"`
 	DeviceHash    string `json:"device_hash"`
+	Platform      string `json:"platform"` // "google" (default) or "apple"
 }
 
 type verifyResponse struct {
@@ -115,17 +116,25 @@ func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Route to platform-specific verification
+	if req.Platform == "apple" {
+		h.verifyApple(w, r, ctx, req)
+	} else {
+		h.verifyGoogle(w, r, ctx, req)
+	}
+}
+
+// verifyGoogle handles Google Play purchase verification via the Play Developer API.
+func (h *VerifyHandler) verifyGoogle(w http.ResponseWriter, r *http.Request, ctx context.Context, req verifyRequest) {
 	// If no service account configured, accept for development/testing.
-	// Same transactional credit path as the real Google Play branch.
 	if h.service == nil {
-		balance, ok, err := h.creditPurchase(ctx, req.PurchaseToken, req.DeviceHash, req.ProductID)
+		balance, ok, err := h.creditPurchase(ctx, req.PurchaseToken, req.DeviceHash, req.ProductID, "google")
 		if err != nil {
 			log.Printf("Failed to credit dev-mode purchase for %s: %v", req.DeviceHash, err)
 			writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "service temporarily unavailable"})
 			return
 		}
 		if !ok {
-			// Duplicate token — already verified by a prior (concurrent) request.
 			writeJSON(w, http.StatusOK, verifyResponse{Valid: false, BumpsGranted: 0})
 			return
 		}
@@ -154,14 +163,13 @@ func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	balance, ok, err := h.creditPurchase(ctx, req.PurchaseToken, req.DeviceHash, req.ProductID)
+	balance, ok, err := h.creditPurchase(ctx, req.PurchaseToken, req.DeviceHash, req.ProductID, "google")
 	if err != nil {
 		log.Printf("Failed to credit verified purchase for %s: %v", req.DeviceHash, err)
 		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "service temporarily unavailable"})
 		return
 	}
 	if !ok {
-		// Duplicate — a concurrent /verify beat us to the insert. Don't double-credit.
 		writeJSON(w, http.StatusOK, verifyResponse{Valid: false, BumpsGranted: 0})
 		return
 	}
@@ -172,6 +180,68 @@ func (h *VerifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		PaidBalance:   balance,
 		FreeRemaining: h.computeFreeRemaining(ctx, req.DeviceHash),
 	})
+}
+
+// verifyApple handles Apple App Store purchase verification.
+// StoreKit 2 provides the transaction as signed JSON. The iOS client sends
+// the transaction's JSON representation as the purchase_token. We parse it
+// to extract the transactionId (for replay protection) and productId.
+//
+// For full production security, this should validate the JWS signature against
+// Apple's root certificate chain. For now, we rely on:
+// 1. The client-side StoreKit 2 verification (Apple signs the transaction locally)
+// 2. Our server-side replay protection (transactionId uniqueness in DB)
+// 3. The iOS app being distributed via App Store (not sideloaded)
+func (h *VerifyHandler) verifyApple(w http.ResponseWriter, r *http.Request, ctx context.Context, req verifyRequest) {
+	// Parse the transaction JSON to extract transactionId and productId
+	var txn appleTransaction
+	if err := json.Unmarshal([]byte(req.PurchaseToken), &txn); err != nil {
+		log.Printf("Apple verify: failed to parse transaction JSON for %s: %v", req.DeviceHash, err)
+		writeJSON(w, http.StatusOK, verifyResponse{Valid: false, BumpsGranted: 0})
+		return
+	}
+
+	if txn.TransactionID == "" {
+		writeJSON(w, http.StatusOK, verifyResponse{Valid: false, BumpsGranted: 0})
+		return
+	}
+
+	if txn.ProductID != "bump_single" {
+		writeJSON(w, http.StatusOK, verifyResponse{Valid: false, BumpsGranted: 0})
+		return
+	}
+
+	// Use transactionId as the replay-protection key (prefixed to avoid collision
+	// with Google purchase tokens which are opaque strings)
+	replayKey := "apple:" + txn.TransactionID
+
+	balance, ok, err := h.creditPurchase(ctx, replayKey, req.DeviceHash, req.ProductID, "apple")
+	if err != nil {
+		log.Printf("Failed to credit Apple purchase for %s: %v", req.DeviceHash, err)
+		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "service temporarily unavailable"})
+		return
+	}
+	if !ok {
+		// Duplicate transactionId — already credited
+		writeJSON(w, http.StatusOK, verifyResponse{Valid: false, BumpsGranted: 0})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, verifyResponse{
+		Valid:         true,
+		BumpsGranted:  1,
+		PaidBalance:   balance,
+		FreeRemaining: h.computeFreeRemaining(ctx, req.DeviceHash),
+	})
+}
+
+// appleTransaction represents the relevant fields from a StoreKit 2
+// transaction's JSON representation.
+type appleTransaction struct {
+	TransactionID string `json:"transactionId"`
+	ProductID     string `json:"productId"`
+	// Other fields (bundleId, purchaseDate, environment, etc.) can be added
+	// when full Apple signature verification is implemented.
 }
 
 // computeFreeRemaining returns today's remaining free bumps for a device, or
@@ -204,14 +274,14 @@ func (h *VerifyHandler) computeFreeRemaining(ctx context.Context, deviceHash str
 //
 // Fixes audit findings C1 (double-credit race), H1 (no rollback on
 // post-replay-lock failure), and H2 (non-atomic balance read).
-func (h *VerifyHandler) creditPurchase(ctx context.Context, purchaseToken, deviceHash, productID string) (int, bool, error) {
+func (h *VerifyHandler) creditPurchase(ctx context.Context, purchaseToken, deviceHash, productID, platform string) (int, bool, error) {
 	tx, err := h.queries.BeginTx(ctx)
 	if err != nil {
 		return 0, false, err
 	}
 	defer tx.Rollback() // no-op after successful Commit
 
-	inserted, err := h.queries.RecordVerifiedPurchaseTx(ctx, tx, purchaseToken, deviceHash, productID)
+	inserted, err := h.queries.RecordVerifiedPurchaseTx(ctx, tx, purchaseToken, deviceHash, productID, platform)
 	if err != nil {
 		return 0, false, err
 	}

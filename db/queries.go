@@ -128,11 +128,14 @@ func (q *Queries) RecordVerifiedPurchase(ctx context.Context, purchaseToken, dev
 }
 
 // RecordVerifiedPurchaseTx is the transactional version for the verify handler.
-func (q *Queries) RecordVerifiedPurchaseTx(ctx context.Context, tx *sql.Tx, purchaseToken, deviceHash, productID string) (bool, error) {
+func (q *Queries) RecordVerifiedPurchaseTx(ctx context.Context, tx *sql.Tx, purchaseToken, deviceHash, productID, platform string) (bool, error) {
+	if platform == "" {
+		platform = "google"
+	}
 	result, err := tx.ExecContext(ctx,
-		`INSERT INTO verified_purchases (purchase_token, device_hash, product_id) VALUES ($1, $2, $3)
+		`INSERT INTO verified_purchases (purchase_token, device_hash, product_id, platform) VALUES ($1, $2, $3, $4)
 		 ON CONFLICT (purchase_token) DO NOTHING`,
-		purchaseToken, deviceHash, productID,
+		purchaseToken, deviceHash, productID, platform,
 	)
 	if err != nil {
 		return false, err

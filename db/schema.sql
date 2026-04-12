@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS verified_purchases (
     purchase_token VARCHAR(512) PRIMARY KEY,
     device_hash VARCHAR(32) NOT NULL,
     product_id VARCHAR(64) NOT NULL,
+    platform VARCHAR(10) NOT NULL DEFAULT 'google',
     verified_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -42,6 +43,16 @@ CREATE TABLE IF NOT EXISTS device_bumps (
     paid_balance INTEGER NOT NULL DEFAULT 0 CHECK (paid_balance >= 0),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add platform column to verified_purchases (safe for existing databases)
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'verified_purchases' AND column_name = 'platform'
+    ) THEN
+        ALTER TABLE verified_purchases ADD COLUMN platform VARCHAR(10) NOT NULL DEFAULT 'google';
+    END IF;
+END $$;
 
 -- Automatic cleanup: delete session logs older than 7 days
 -- Run via pg_cron or application-level scheduled task
